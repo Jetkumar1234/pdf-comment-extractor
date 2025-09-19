@@ -1,16 +1,19 @@
 import streamlit as st
 import fitz  # PyMuPDF
-import easyocr
+import pytesseract
 from pdf2image import convert_from_bytes
+from PIL import Image
 
 st.title("PDF Comment Extractor (with OCR)")
 
 uploaded_file = st.file_uploader("Upload a PDF file", type="pdf")
 
 if uploaded_file:
-    # ---- Step 1: Extract digital annotations ----
+    # Load PDF
     doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
     comments = []
+
+    # ---- Extract digital annotations ----
     for page_num, page in enumerate(doc, start=1):
         for annot in page.annots() or []:
             comments.append({
@@ -18,22 +21,22 @@ if uploaded_file:
                 "comment": annot.info.get("content", "")
             })
 
-    # ---- Step 2: OCR for handwritten/pasted comments ----
-    st.info("Running OCR on each page... (this may take 10–20 sec on first run)")
+    # ---- OCR for scanned/handwritten comments ----
+    st.info("Running OCR on each page (this may take a few seconds)...")
     uploaded_file.seek(0)  # reset file pointer for OCR
     images = convert_from_bytes(uploaded_file.read())
-
-    reader = easyocr.Reader(['en'])  # English OCR
     for page_num, img in enumerate(images, start=1):
-        text_results = reader.readtext(img)
-        text = " ".join([res[1] for res in text_results])
+        text = pytesseract.image_to_string(img)
         if text.strip():
-            comments.append({"page": page_num, "comment": text.strip()})
+            comments.append({
+                "page": page_num,
+                "comment": text.strip()
+            })
 
-    # ---- Step 3: Display results ----
+    # ---- Display results ----
     if comments:
-        st.success("✅ Comments found in PDF:")
+        st.success("Comments found in PDF:")
         for c in comments:
             st.write(f"📄 Page {c['page']}: {c['comment']}")
     else:
-        st.warning("⚠️ No comments found in this PDF.")
+        st.warning("No comments found in this PDF.")
